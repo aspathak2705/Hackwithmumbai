@@ -4,15 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Scanner Mobile App</title>
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner.umd.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2.39.7/dist/umd/supabase.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Arial', sans-serif;
             background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%);
@@ -20,320 +15,39 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
-
-        .app-container {
-            max-width: 100vw;
-            margin: 0 auto;
-            padding: 10px;
-        }
-
-        .header {
-            text-align: center;
-            padding: 20px 10px;
-            background: linear-gradient(135deg, #dc143c, #b71c1c);
-            border-radius: 0 0 20px 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(220, 20, 60, 0.3);
-        }
-
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-        }
-
-        .header p {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-
-        .camera-container {
-            position: relative;
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto 20px;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-        }
-
-        #video-container {
-            position: relative;
-            width: 100%;
-            height: 300px;
-            background: #2a2a2a;
-            border-radius: 15px;
-            overflow: hidden;
-            border: 3px solid #dc143c;
-        }
-
-        #preview {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            background-color: #000;
-        }
-
-        .camera-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 200px;
-            height: 200px;
-            border: 3px solid #dc143c;
-            border-radius: 15px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
-            pointer-events: none;
-            animation: pulse 2s infinite;
-            z-index: 10;
-        }
-
-        @keyframes pulse {
-            0%, 100% { 
-                border-color: #dc143c; 
-                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3);
-            }
-            50% { 
-                border-color: #ff4569; 
-                box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-            }
-        }
-
-        .camera-status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            color: #dc143c;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            z-index: 20;
-        }
-
-        .controls {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin: 20px 0;
-            flex-wrap: wrap;
-        }
-
-        .btn {
-            background: linear-gradient(135deg, #dc143c, #b71c1c);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 120px;
-            box-shadow: 0 4px 15px rgba(220, 20, 60, 0.3);
-            position: relative;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(220, 20, 60, 0.4);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn:disabled {
-            background: #666;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .debug-info {
-            background: #333;
-            border: 1px solid #dc143c;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .debug-info h4 {
-            color: #dc143c;
-            margin-bottom: 10px;
-        }
-
-        .qr-details {
-            background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
-            border: 2px solid #dc143c;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            box-shadow: 0 4px 15px rgba(220, 20, 60, 0.2);
-            display: none;
-        }
-
-        .qr-details h3 {
-            color: #dc143c;
-            margin-bottom: 15px;
-            text-align: center;
-            font-size: 20px;
-        }
-
-        .detail-item {
-            background: #333;
-            padding: 10px 15px;
-            margin: 8px 0;
-            border-radius: 8px;
-            border-left: 4px solid #dc143c;
-            word-wrap: break-word;
-        }
-
-        .detail-item strong {
-            color: #dc143c;
-            display: block;
-            margin-bottom: 5px;
-        }
-
-        .action-buttons {
-            display: none;
-            gap: 15px;
-            margin: 20px 0;
-        }
-
-        .action-btn {
-            flex: 1;
-            padding: 15px;
-            font-size: 18px;
-            border-radius: 15px;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-
-        .checkin-btn {
-            background: linear-gradient(135deg, #2e7d32, #1b5e20);
-            color: white;
-        }
-
-        .checkout-btn {
-            background: linear-gradient(135deg, #d32f2f, #b71c1c);
-            color: white;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .success-msg, .error-msg {
-            padding: 15px;
-            border-radius: 10px;
-            margin: 15px 0;
-            text-align: center;
-            font-weight: bold;
-            display: none;
-        }
-
-        .success-msg {
-            background: #2e7d32;
-            border: 2px solid #4caf50;
-        }
-
-        .error-msg {
-            background: #d32f2f;
-            border: 2px solid #f44336;
-        }
-
-        .history {
-            background: #2a2a2a;
-            border-radius: 15px;
-            padding: 20px;
-            margin: 20px 0;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .history h3 {
-            color: #dc143c;
-            margin-bottom: 15px;
-            text-align: center;
-        }
-
-        .history-item {
-            background: #333;
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 8px;
-            border-left: 4px solid #dc143c;
-            font-size: 14px;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            color: #dc143c;
-            margin: 20px 0;
-        }
-
-        .spinner {
-            border: 3px solid #333;
-            border-top: 3px solid #dc143c;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Mobile optimizations */
-        @media (max-width: 768px) {
-            .controls {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .btn {
-                width: 200px;
-            }
-            
-            .action-buttons {
-                flex-direction: column;
-            }
-            
-            .header h1 {
-                font-size: 20px;
-            }
-            
-            #video-container {
-                height: 250px;
-            }
-        }
-
-        /* Landscape mobile */
-        @media (max-height: 500px) and (orientation: landscape) {
-            #video-container {
-                height: 200px;
-            }
-            
-            .header {
-                padding: 10px;
-            }
-            
-            .header h1 {
-                font-size: 18px;
-            }
-        }
+        .app-container { max-width: 100vw; margin: 0 auto; padding: 10px; }
+        .header { text-align: center; padding: 20px 10px; background: linear-gradient(135deg, #dc143c, #b71c1c); border-radius: 0 0 20px 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(220, 20, 60, 0.3); }
+        .header h1 { font-size: 24px; margin-bottom: 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        .header p { font-size: 14px; opacity: 0.9; }
+        .camera-container { position: relative; width: 100%; max-width: 400px; margin: 0 auto 20px; border-radius: 15px; overflow: hidden; box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+        #video-container { position: relative; width: 100%; height: 300px; background: #2a2a2a; border-radius: 15px; overflow: hidden; }
+        #qr-video { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .camera-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 200px; border: 3px solid #dc143c; border-radius: 15px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.3); pointer-events: none; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { border-color: #dc143c; } 50% { border-color: #ff4569; } }
+        .camera-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; background: #2a2a2a; border: 3px dashed #dc143c; border-radius: 15px; text-align: center; }
+        .camera-icon { font-size: 48px; color: #dc143c; margin-bottom: 15px; }
+        .controls { display: flex; justify-content: center; gap: 10px; margin: 20px 0; flex-wrap: wrap; }
+        .btn { background: linear-gradient(135deg, #dc143c, #b71c1c); color: white; border: none; padding: 12px 20px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; transition: all 0.3s ease; min-width: 120px; box-shadow: 0 4px 15px rgba(220, 20, 60, 0.3); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(220, 20, 60, 0.4); }
+        .btn:disabled { background: #666; cursor: not-allowed; }
+        .qr-details { background: linear-gradient(135deg, #2a2a2a, #1a1a1a); border: 2px solid #dc143c; border-radius: 15px; padding: 20px; margin: 20px 0; box-shadow: 0 4px 15px rgba(220, 20, 60, 0.2); display: none; }
+        .qr-details h3 { color: #dc143c; margin-bottom: 15px; text-align: center; font-size: 20px; }
+        .detail-item { background: #333; padding: 10px 15px; margin: 8px 0; border-radius: 8px; border-left: 4px solid #dc143c; word-wrap: break-word; }
+        .detail-item strong { color: #dc143c; display: block; margin-bottom: 5px; }
+        .action-buttons { display: none; gap: 15px; margin: 20px 0; }
+        .action-btn { flex: 1; padding: 15px; font-size: 18px; border-radius: 15px; border: none; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .checkin-btn { background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; }
+        .checkout-btn { background: linear-gradient(135deg, #d32f2f, #b71c1c); color: white; }
+        .success-msg, .error-msg { padding: 15px; border-radius: 10px; margin: 15px 0; text-align: center; font-weight: bold; display: none; }
+        .success-msg { background: #2e7d32; border: 2px solid #4caf50; }
+        .error-msg { background: #d32f2f; border: 2px solid #f44336; }
+        .history { background: #2a2a2a; border-radius: 15px; padding: 20px; margin: 20px 0; max-height: 300px; overflow-y: auto; }
+        .history h3 { color: #dc143c; margin-bottom: 15px; text-align: center; }
+        .history-item { background: #333; padding: 10px; margin: 8px 0; border-radius: 8px; border-left: 4px solid #dc143c; font-size: 14px; }
+        .loading { display: none; text-align: center; color: #dc143c; margin: 20px 0; }
+        .spinner { border: 3px solid #333; border-top: 3px solid #dc143c; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .controls { flex-direction: column; } .btn { width: 200px; } .action-buttons { flex-direction: column; } }
     </style>
 </head>
 <body>
@@ -345,32 +59,27 @@
 
         <div class="camera-container">
             <div id="video-container">
-                <video id="preview" autoplay playsinline muted></video>
+                <video id="qr-video" playsinline></video>
                 <div class="camera-overlay"></div>
-                <div class="camera-status" id="camera-status">Camera Off</div>
+                <div class="camera-placeholder" id="camera-placeholder">
+                    <div class="camera-icon">📸</div>
+                    <p>Tap "Start Camera" to begin scanning</p>
+                </div>
             </div>
         </div>
 
         <div class="controls">
-            <button class="btn" id="start-btn" onclick="startScanning()">Start Camera</button>
-            <button class="btn" id="stop-btn" onclick="stopScanning()" disabled>Stop Camera</button>
-            <button class="btn" onclick="toggleDebug()">Debug Info</button>
-            <button class="btn" onclick="testCameraAccess()">Test Camera</button>
-            <button class="btn" onclick="testSupabaseConnection()">Test Database</button>
+            <button class="btn" id="start-btn" onclick="startCamera()">Start Camera</button>
+            <button class="btn" id="stop-btn" onclick="stopCamera()" disabled>Stop Camera</button>
         </div>
 
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            <p>Processing...</p>
+            <p>Processing QR Code...</p>
         </div>
 
         <div class="success-msg" id="success-msg"></div>
         <div class="error-msg" id="error-msg"></div>
-
-        <div class="debug-info" id="debug-info" style="display: none;">
-            <h4>🔧 Debug Information</h4>
-            <div id="debug-content">Click Start Camera to see debug info...</div>
-        </div>
 
         <div class="qr-details" id="qr-details">
             <h3>📋 QR Code Details</h3>
@@ -378,627 +87,89 @@
         </div>
 
         <div class="action-buttons" id="action-buttons">
-            <button class="action-btn checkin-btn" onclick="checkIn()">
-                🟢 CHECK IN
-            </button>
-            <button class="action-btn checkout-btn" onclick="checkOut()">
-                🔴 CHECK OUT
-            </button>
+            <button class="action-btn checkin-btn" onclick="checkIn()">🟢 CHECK IN</button>
+            <button class="action-btn checkout-btn" onclick="checkOut()">🔴 CHECK OUT</button>
         </div>
 
         <div class="history">
             <h3>📈 Recent Activity</h3>
-            <div id="history-content">
-                <p style="text-align: center; opacity: 0.7;">No scans yet</p>
-            </div>
+            <div id="history-content"><p style="text-align: center; opacity: 0.7;">No scans yet</p></div>
         </div>
     </div>
 
     <script>
-        // =============================================================================
-        // SUPABASE CONFIGURATION
-        // =============================================================================
-        
-        // Replace these with your actual Supabase project credentials
-        const SUPABASE_CONFIG = {
-            url: 'https://bsgtvopnvxuwqvvjkkxy.supabase.co',  // Replace with your project URL
-            key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZ3R2b3Budnh1d3F2dmpra3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNjE4ODMsImV4cCI6MjA3MzkzNzg4M30.0DXHWwEII9nulWrUzJeY_DgVBgZNNxgd1rifg-jG0ys'              // Replace with your anon public key
-        };
+        let qrScanner = null;
+        let currentQRData = null;
+        let scanHistory = JSON.parse(localStorage.getItem('qrScanHistory') || '[]');
 
-        // Supabase client
-        let supabaseClient = null;
-        let isSupabaseConfigured = false;
-
-
-        async function initializeDatabase() {
-            try {
-                debugLog('Initializing Supabase...');
-
-                // Check if Supabase is configured
-                if (SUPABASE_CONFIG.url === 'https://your-project-ref.supabase.co') {
-                    debugLog('⚠️ Supabase not configured yet - using local storage');
-                    showMessage('Configure Supabase credentials for cloud storage. Currently using local storage.', false);
-                    return true;
-                }
-
-                // Check if Supabase library is loaded
-                if (typeof supabase === 'undefined') {
-                    throw new Error('Supabase library not loaded');
-                }
-
-                // Initialize Supabase client
-                supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
-                
-                // Test connection
-                debugLog('Testing Supabase connection...');
-                const { data, error } = await supabaseClient
-                    .from('qr_scans')
-                    .select('count', { count: 'exact' })
-                    .limit(1);
-
-                if (error) {
-                    if (error.code === '42P01') {
-                        // Table doesn't exist
-                        debugLog('⚠️ Table "qr_scans" not found. Please create it in Supabase.');
-                        showMessage('Database table not found. Please run the SQL setup script in Supabase.', true);
-                    } else {
-                        throw error;
-                    }
-                } else {
-                    debugLog(`✅ Supabase connected! Found ${data.length} records.`);
-                    showMessage('✅ Connected to Supabase database!', false);
-                    isSupabaseConfigured = true;
-                }
-
-                return true;
-
-            } catch (error) {
-                debugLog('Supabase initialization failed: ' + error.message);
-                showMessage('Supabase connection failed: ' + error.message + '. Using local storage.', true);
-                return true; // Continue with local storage
-            }
-        }
-
-        // =============================================================================
-        // DATABASE OPERATIONS
-        // =============================================================================
-
-        async function saveToDatabase(action, qrData, timestamp) {
-            const record = {
-                id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                action: action,
-                qr_data: qrData,
-                timestamp: timestamp,
-                device_info: {
-                    userAgent: navigator.userAgent.substring(0, 100),
-                    url: location.href,
-                    screen: `${screen.width}x${screen.height}`,
-                    platform: navigator.platform
-                }
-            };
-
-            try {
-                if (isSupabaseConfigured) {
-                    return await saveToSupabase(record);
-                } else {
-                    return await saveToLocalStorage(record);
-                }
-            } catch (error) {
-                debugLog('Supabase save failed, falling back to local: ' + error.message);
-                return await saveToLocalStorage(record);
-            }
-        }
-
-        // Save to Supabase
-        async function saveToSupabase(record) {
-            debugLog('Saving to Supabase...');
-            
-            const { data, error } = await supabaseClient
-                .from('qr_scans')
-                .insert([record])
-                .select();
-
-            if (error) {
-                debugLog('Supabase save error: ' + error.message);
-                throw error;
-            }
-            
-            debugLog('✅ Saved to Supabase successfully');
-            return true;
-        }
-
-        // Local storage fallback
-        async function saveToLocalStorage(record) {
-            let records = JSON.parse(localStorage.getItem('qr_database') || '[]');
-            records.unshift(record);
-            records = records.slice(0, 100); // Keep only last 100 records
-            localStorage.setItem('qr_database', JSON.stringify(records));
-            debugLog('✅ Saved to local storage');
-            return true;
-        }
-
-        // Get all records from database
-        async function getRecordsFromDatabase() {
-            try {
-                if (isSupabaseConfigured) {
-                    debugLog('Fetching records from Supabase...');
-                    const { data, error } = await supabaseClient
-                        .from('qr_scans')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(20);
-
-                    if (error) throw error;
-                    
-                    debugLog(`✅ Fetched ${data.length} records from Supabase`);
-                    return data;
-                } else {
-                    return JSON.parse(localStorage.getItem('qr_database') || '[]');
-                }
-            } catch (error) {
-                debugLog('Supabase fetch failed, using local: ' + error.message);
-                return JSON.parse(localStorage.getItem('qr_database') || '[]');
-            }
-        }
-
-        // Test Supabase connection
-        async function testSupabaseConnection() {
-            if (!isSupabaseConfigured) {
-                showMessage('Supabase not configured. Please add your credentials.', true);
-                return false;
-            }
-
-            try {
-                debugLog('Testing Supabase connection...');
-                showLoading(true);
-
-                // Test insert
-                const testRecord = {
-                    id: `test_${Date.now()}`,
-                    action: 'CONNECTION_TEST',
-                    qr_data: { test: 'connection' },
-                    timestamp: new Date().toISOString(),
-                    device_info: { test: true }
-                };
-
-                const { data, error } = await supabaseClient
-                    .from('qr_scans')
-                    .insert([testRecord])
-                    .select();
-
-                if (error) throw error;
-
-                // Test select
-                const { data: selectData, error: selectError } = await supabaseClient
-                    .from('qr_scans')
-                    .select('*')
-                    .eq('id', testRecord.id)
-                    .single();
-
-                if (selectError) throw selectError;
-
-                // Delete test record
-                await supabaseClient
-                    .from('qr_scans')
-                    .delete()
-                    .eq('id', testRecord.id);
-
-                showLoading(false);
-                showMessage('✅ Supabase connection test successful!', false);
-                debugLog('✅ Supabase connection test passed');
-                return true;
-
-            } catch (error) {
-                showLoading(false);
-                showMessage('❌ Supabase connection test failed: ' + error.message, true);
-                debugLog('❌ Supabase test failed: ' + error.message);
-                return false;
-            }
-        }
-
-        // Debug logging
-        function debugLog(message) {
-            console.log('[QR Scanner]', message);
-            if (debugMode) {
-                const debugContent = document.getElementById('debug-content');
-                const timestamp = new Date().toLocaleTimeString();
-                debugContent.innerHTML += `<br>[${timestamp}] ${message}`;
-                debugContent.scrollTop = debugContent.scrollHeight;
-            }
-        }
-
-        function toggleDebug() {
-            debugMode = !debugMode;
-            const debugInfo = document.getElementById('debug-info');
-            debugInfo.style.display = debugMode ? 'block' : 'none';
-            
-            if (debugMode) {
-                document.getElementById('debug-content').innerHTML = 'Debug mode enabled...<br>';
-                checkBrowserSupport();
-            }
-        }
-
-        function checkBrowserSupport() {
-            debugLog('=== Browser Support Check ===');
-            debugLog('User Agent: ' + navigator.userAgent);
-            debugLog('Protocol: ' + location.protocol);
-            debugLog('Hostname: ' + location.hostname);
-            debugLog('Full URL: ' + location.href);
-            debugLog('MediaDevices API: ' + !!navigator.mediaDevices);
-            debugLog('getUserMedia: ' + !!navigator.mediaDevices?.getUserMedia);
-            debugLog('ZXing Library: ' + (typeof ZXing !== 'undefined'));
-            
-            // Check HTTPS requirement
-            const isSecure = location.protocol === 'https:' || 
-                           location.hostname === 'localhost' || 
-                           location.hostname === '127.0.0.1' ||
-                           location.hostname.endsWith('.localhost');
-            
-            debugLog('Secure Context: ' + isSecure);
-            
-            if (!isSecure) {
-                debugLog('⚠️ CRITICAL: Camera requires HTTPS connection');
-                showMessage('🔒 Camera requires HTTPS. Please use https:// in your URL or deploy to a secure hosting service.', true);
-            }
-            
-            // Check browser compatibility
-            const isCompatibleBrowser = /Chrome|Safari|Firefox|Edge/i.test(navigator.userAgent);
-            debugLog('Compatible Browser: ' + isCompatibleBrowser);
-            
-            if (!isCompatibleBrowser) {
-                debugLog('⚠️ WARNING: Unsupported browser detected');
-                showMessage('Please use Chrome, Safari, Firefox, or Edge for best camera support.', true);
-            }
-            
-            // Test camera permissions
-            if (navigator.permissions) {
-                navigator.permissions.query({ name: 'camera' })
-                    .then(permission => {
-                        debugLog('Camera permission state: ' + permission.state);
-                        if (permission.state === 'denied') {
-                            showMessage('Camera permission denied. Please reset site permissions and reload.', true);
-                        }
-                    })
-                    .catch(err => debugLog('Permission query failed: ' + err.message));
-            }
-        }
-
-        function updateCameraStatus(status) {
-            document.getElementById('camera-status').textContent = status;
-            debugLog('Camera Status: ' + status);
-        }
+        // 🔹 Supabase configuration (replace with your own project details)
+        const SUPABASE_URL = "https://bsgtvopnvxuwqvvjkkxy.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZ3R2b3Budnh1d3F2dmpra3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNjE4ODMsImV4cCI6MjA3MzkzNzg4M30.0DXHWwEII9nulWrUzJeY_DgVBgZNNxgd1rifg-jG0ys";
+        const supabase = supabasejs.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         function showMessage(message, isError = false) {
             const successMsg = document.getElementById('success-msg');
             const errorMsg = document.getElementById('error-msg');
-            
-            debugLog((isError ? 'ERROR: ' : 'SUCCESS: ') + message);
-            
             if (isError) {
-                errorMsg.textContent = message;
-                errorMsg.style.display = 'block';
-                successMsg.style.display = 'none';
-                setTimeout(() => errorMsg.style.display = 'none', 5000);
+                errorMsg.textContent = message; errorMsg.style.display = 'block';
+                successMsg.style.display = 'none'; setTimeout(() => errorMsg.style.display = 'none', 3000);
             } else {
-                successMsg.textContent = message;
-                successMsg.style.display = 'block';
-                errorMsg.style.display = 'none';
-                setTimeout(() => successMsg.style.display = 'none', 3000);
+                successMsg.textContent = message; successMsg.style.display = 'block';
+                errorMsg.style.display = 'none'; setTimeout(() => successMsg.style.display = 'none', 3000);
             }
         }
+        function showLoading(show) { document.getElementById('loading').style.display = show ? 'block' : 'none'; }
 
-        function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
-        }
-
-        // Global variables
-        let codeReader = null;
-        let selectedDeviceId = null;
-        let currentQRData = null;
-        let scanHistory = JSON.parse(localStorage.getItem('qrScanHistory') || '[]');
-        let isScanning = false;
-        let debugMode = false;
-            try {
-                debugLog('Requesting camera permission...');
-                
-                // First, request basic camera access to trigger permission dialog
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: { ideal: 'environment' },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                });
-                
-                debugLog('Camera permission granted');
-                
-                // Stop the test stream
-                stream.getTracks().forEach(track => track.stop());
-                
-                return true;
-            } catch (error) {
-                debugLog('Camera permission error: ' + error.name + ' - ' + error.message);
-                
-                let errorMsg = 'Camera access denied. ';
-                if (error.name === 'NotAllowedError') {
-                    errorMsg += 'Please click the camera icon in your browser address bar and allow camera access, then refresh the page.';
-                } else if (error.name === 'NotFoundError') {
-                    errorMsg += 'No camera found on this device.';
-                } else if (error.name === 'NotSupportedError') {
-                    errorMsg += 'Camera not supported. Please use Chrome, Safari, or Firefox.';
-                } else if (error.name === 'NotReadableError') {
-                    errorMsg += 'Camera is being used by another application. Please close other camera apps.';
-                } else {
-                    errorMsg += error.message;
-                }
-                
-                showMessage(errorMsg, true);
-                return false;
-            }
-        }
-
-        async function initializeScanner() {
-            try {
-                debugLog('Initializing ZXing scanner...');
-                
-                if (typeof ZXing === 'undefined') {
-                    throw new Error('ZXing library not loaded');
-                }
-                
-                // Request camera permission first
-                const hasPermission = await requestCameraPermission();
-                if (!hasPermission) {
-                    return false;
-                }
-                
-                codeReader = new ZXing.BrowserMultiFormatReader();
-                debugLog('Scanner initialized successfully');
-                
-                // Get available cameras after permission is granted
-                const videoInputDevices = await codeReader.listVideoInputDevices();
-                debugLog(`Found ${videoInputDevices.length} camera(s):`);
-                
-                if (videoInputDevices.length === 0) {
-                    throw new Error('No video input devices found');
-                }
-                
-                videoInputDevices.forEach((device, index) => {
-                    debugLog(`${index + 1}. ${device.label || 'Camera ' + (index + 1)} (${device.deviceId})`);
-                });
-                
-                // Select back camera if available
-                selectedDeviceId = videoInputDevices.find(device => 
-                    device.label.toLowerCase().includes('back') || 
-                    device.label.toLowerCase().includes('rear') ||
-                    device.label.toLowerCase().includes('environment')
-                )?.deviceId || videoInputDevices[0]?.deviceId;
-                
-                debugLog(`Selected device: ${selectedDeviceId}`);
-                
-                return true;
-                
-            } catch (error) {
-                debugLog('Scanner initialization failed: ' + error.message);
-                showMessage('Scanner initialization failed: ' + error.message, true);
-                return false;
-            }
-        }
-
-        async function startScanning() {
+        async function startCamera() {
             try {
                 showLoading(true);
-                updateCameraStatus('Requesting Permission...');
-                debugLog('=== Starting Camera ===');
-                
-                // Check HTTPS requirement first
-                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                    throw new Error('Camera requires HTTPS connection. Please use https:// URL');
-                }
-                
-                // Initialize scanner if not done
-                if (!codeReader) {
-                    updateCameraStatus('Initializing Scanner...');
-                    const initialized = await initializeScanner();
-                    if (!initialized) {
-                        showLoading(false);
-                        updateCameraStatus('Initialization Failed');
-                        return;
-                    }
-                }
-                
-                updateCameraStatus('Starting Camera...');
-                
-                // Clear any existing video streams
-                const videoElement = document.getElementById('preview');
-                if (videoElement.srcObject) {
-                    videoElement.srcObject.getTracks().forEach(track => track.stop());
-                    videoElement.srcObject = null;
-                }
-                
-                // Start scanning with explicit device selection
-                debugLog('Starting decode from video device: ' + selectedDeviceId);
-                
-                const constraints = {
-                    deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-                    facingMode: selectedDeviceId ? undefined : { ideal: 'environment' },
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 },
-                    aspectRatio: { ideal: 16/9 },
-                    frameRate: { ideal: 15, max: 30 }
-                };
-                
-                debugLog('Using constraints: ' + JSON.stringify(constraints));
-                
-                // Use continuous scanning for better results
-                await codeReader.decodeFromConstraints(constraints, 'preview', (result, err) => {
-                    if (result) {
-                        debugLog('QR Code detected: ' + result.text);
-                        handleQRResult(result.text);
-                    }
-                    if (err && err.name !== 'NotFoundException') {
-                        debugLog('Decode error: ' + err.message);
-                    }
-                });
-                
-                isScanning = true;
-                
-                // Update UI
-                updateCameraStatus('Camera Active - Scanning...');
+                const video = document.getElementById('qr-video');
+                const placeholder = document.getElementById('camera-placeholder');
+                if (!QrScanner.hasCamera()) throw new Error('No camera found');
+                qrScanner = new QrScanner(video, result => handleQRResult(result.data), { preferredCamera: 'environment' });
+                await qrScanner.start();
+                video.style.display = 'block'; placeholder.style.display = 'none';
                 document.getElementById('start-btn').disabled = true;
                 document.getElementById('stop-btn').disabled = false;
-                
-                showLoading(false);
-                showMessage('📸 Camera started! Point at a QR code to scan.');
-                
-                // Add video event listeners for better debugging
-                videoElement.addEventListener('loadedmetadata', () => {
-                    debugLog(`Video loaded: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
-                });
-                
-                videoElement.addEventListener('error', (e) => {
-                    debugLog('Video error: ' + e.message);
-                });
-                
+                showLoading(false); showMessage('Camera started successfully! Point at a QR code to scan.');
             } catch (error) {
-                showLoading(false);
-                updateCameraStatus('Camera Error');
-                debugLog('Camera start error: ' + error.message);
-                
-                let errorMessage = 'Camera failed to start: ';
-                if (error.name === 'NotAllowedError') {
-                    errorMessage += 'Permission denied. Please:\n1. Click camera icon in address bar\n2. Allow camera access\n3. Refresh page and try again';
-                } else if (error.name === 'NotFoundError') {
-                    errorMessage += 'No camera found. Please check if your device has a camera.';
-                } else if (error.name === 'NotSupportedError') {
-                    errorMessage += 'Camera not supported. Please use Chrome, Safari, or Firefox browser.';
-                } else if (error.name === 'OverconstrainedError') {
-                    errorMessage += 'Camera constraints too strict. Trying with relaxed settings...';
-                    // Try again with relaxed constraints
-                    setTimeout(() => startScanningRelaxed(), 1000);
-                    return;
-                } else if (error.message.includes('HTTPS')) {
-                    errorMessage = error.message;
-                } else {
-                    errorMessage += error.message;
-                }
-                
-                showMessage(errorMessage, true);
+                showLoading(false); showMessage(`Camera error: ${error.message}`, true);
             }
         }
 
-        async function startScanningRelaxed() {
-            try {
-                debugLog('Trying with relaxed camera constraints...');
-                updateCameraStatus('Retrying with basic settings...');
-                
-                await codeReader.decodeFromConstraints({
-                    video: { facingMode: 'environment' }
-                }, 'preview', (result, err) => {
-                    if (result) {
-                        debugLog('QR Code detected: ' + result.text);
-                        handleQRResult(result.text);
-                    }
-                });
-                
-                isScanning = true;
-                updateCameraStatus('Camera Active - Scanning...');
-                document.getElementById('start-btn').disabled = true;
-                document.getElementById('stop-btn').disabled = false;
-                showMessage('📸 Camera started with basic settings!');
-                
-            } catch (error) {
-                debugLog('Relaxed camera start also failed: ' + error.message);
-                updateCameraStatus('All camera attempts failed');
-                showMessage('Unable to access camera. Please check permissions and try refreshing the page.', true);
-            }
-        }
-
-        async function continuousScanning() {
-            if (!isScanning) return;
-            
-            try {
-                const result = await codeReader.decodeOnceFromVideoDevice(selectedDeviceId, 'preview');
-                if (result && result.text) {
-                    debugLog('QR Code found: ' + result.text);
-                    handleQRResult(result.text);
-                    return; // Stop scanning after finding a code
-                }
-            } catch (err) {
-                // Normal - no QR code found, continue scanning
-                if (err.name !== 'NotFoundException') {
-                    debugLog('Scan error: ' + err.message);
-                }
-            }
-            
-            // Continue scanning
-            setTimeout(continuousScanning, 100);
-        }
-
-        function stopScanning() {
-            debugLog('=== Stopping Camera ===');
-            isScanning = false;
-            
-            if (codeReader) {
-                codeReader.reset();
-            }
-            
-            updateCameraStatus('Camera Off');
+        function stopCamera() {
+            if (qrScanner) { qrScanner.stop(); qrScanner.destroy(); qrScanner = null; }
+            document.getElementById('qr-video').style.display = 'none';
+            document.getElementById('camera-placeholder').style.display = 'flex';
             document.getElementById('start-btn').disabled = false;
             document.getElementById('stop-btn').disabled = true;
-            
             showMessage('Camera stopped');
         }
 
-        function handleQRResult(qrData) {
-            isScanning = false; // Stop continuous scanning
+        function handleQRResult(data) {
             showLoading(true);
-            debugLog('Processing QR data: ' + qrData);
-            
             try {
-                currentQRData = parseQRData(qrData);
+                currentQRData = parseQRData(data);
                 displayQRDetails(currentQRData);
                 saveToHistory('QR_SCANNED', currentQRData);
-                
-                showLoading(false);
-                showMessage('🎉 QR Code scanned successfully!');
-                
-                // Stop camera to save battery
-                setTimeout(stopScanning, 1000);
-                
+                showLoading(false); showMessage('QR Code scanned successfully!');
+                stopCamera();
             } catch (error) {
-                showLoading(false);
-                debugLog('QR processing error: ' + error.message);
-                showMessage('Error processing QR code: ' + error.message, true);
-                
-                // Resume scanning
-                isScanning = true;
-                continuousScanning();
+                showLoading(false); showMessage(`Error processing QR: ${error.message}`, true);
             }
         }
 
         function parseQRData(data) {
-            try {
-                return JSON.parse(data);
-            } catch {
+            try { return JSON.parse(data); }
+            catch {
                 if (data.includes('\n') || data.includes(';')) {
-                    const separator = data.includes('\n') ? '\n' : ';';
-                    const lines = data.split(separator);
-                    const parsed = {};
-                    
+                    const separator = data.includes('\n') ? '\n' : ';'; const lines = data.split(separator); const parsed = {};
                     lines.forEach(line => {
-                        if (line.includes(':')) {
-                            const [key, value] = line.split(':', 2);
-                            parsed[key.trim()] = value.trim();
-                        } else if (line.includes('=')) {
-                            const [key, value] = line.split('=', 2);
-                            parsed[key.trim()] = value.trim();
-                        }
+                        if (line.includes(':')) { const [k, v] = line.split(':', 2); parsed[k.trim()] = v.trim(); }
+                        else if (line.includes('=')) { const [k, v] = line.split('=', 2); parsed[k.trim()] = v.trim(); }
                     });
-                    
                     return Object.keys(parsed).length > 0 ? parsed : { raw_data: data };
-                } else {
-                    return { raw_data: data };
-                }
+                } else return { raw_data: data };
             }
         }
 
@@ -1006,172 +177,60 @@
             const detailsDiv = document.getElementById('qr-details');
             const contentDiv = document.getElementById('details-content');
             const actionButtons = document.getElementById('action-buttons');
-            
             contentDiv.innerHTML = '';
-            
-            Object.entries(data).forEach(([key, value]) => {
-                const item = document.createElement('div');
-                item.className = 'detail-item';
-                item.innerHTML = `
-                    <strong>${key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</strong>
-                    ${value}
-                `;
+            Object.entries(data).forEach(([k, v]) => {
+                const item = document.createElement('div'); item.className = 'detail-item';
+                item.innerHTML = `<strong>${k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:</strong> ${v}`;
                 contentDiv.appendChild(item);
             });
-            
-            detailsDiv.style.display = 'block';
-            actionButtons.style.display = 'flex';
+            detailsDiv.style.display = 'block'; actionButtons.style.display = 'flex';
         }
 
         function checkIn() {
             if (!currentQRData) return;
-            
             const timestamp = new Date().toISOString();
             saveToHistory('CHECK_IN', currentQRData);
-            saveToDatabase('CHECK_IN', currentQRData, timestamp);
-            showMessage('✅ Check-in recorded at ' + new Date().toLocaleTimeString());
-            updateHistoryDisplay();
+            saveToSupabase('CHECK_IN', currentQRData, timestamp);
+            showMessage('✅ Check-in recorded successfully!'); updateHistoryDisplay();
         }
 
         function checkOut() {
             if (!currentQRData) return;
-            
             const timestamp = new Date().toISOString();
             saveToHistory('CHECK_OUT', currentQRData);
-            saveToDatabase('CHECK_OUT', currentQRData, timestamp);
-            showMessage('✅ Check-out recorded at ' + new Date().toLocaleTimeString());
-            updateHistoryDisplay();
+            saveToSupabase('CHECK_OUT', currentQRData, timestamp);
+            showMessage('✅ Check-out recorded successfully!'); updateHistoryDisplay();
         }
 
         function saveToHistory(action, qrData) {
-            const record = {
-                id: Date.now(),
-                action: action,
-                qrData: qrData,
-                timestamp: new Date().toISOString(),
-                date: new Date().toLocaleString()
-            };
-            
-            scanHistory.unshift(record);
-            scanHistory = scanHistory.slice(0, 20);
-            localStorage.setItem('qrScanHistory', JSON.stringify(scanHistory));
-            updateHistoryDisplay();
+            const record = { id: Date.now(), action, qrData, timestamp: new Date().toISOString(), date: new Date().toLocaleString() };
+            scanHistory.unshift(record); scanHistory = scanHistory.slice(0, 20);
+            localStorage.setItem('qrScanHistory', JSON.stringify(scanHistory)); updateHistoryDisplay();
+        }
+
+        async function saveToSupabase(action, qrData, timestamp) {
+            try {
+                const { data, error } = await supabase.from("qr_scans").insert([
+                    { action, qr_data: qrData, timestamp, created_at: new Date().toISOString() }
+                ]);
+                if (error) console.error("Supabase save error:", error.message);
+                else console.log("Saved to Supabase:", data);
+            } catch (err) { console.error("Unexpected error saving:", err); }
         }
 
         function updateHistoryDisplay() {
             const historyContent = document.getElementById('history-content');
-            
-            if (scanHistory.length === 0) {
-                historyContent.innerHTML = '<p style="text-align: center; opacity: 0.7;">No scans yet</p>';
-                return;
-            }
-            
-            historyContent.innerHTML = scanHistory.slice(0, 5).map(record => `
+            if (scanHistory.length === 0) { historyContent.innerHTML = '<p style="text-align: center; opacity: 0.7;">No scans yet</p>'; return; }
+            historyContent.innerHTML = scanHistory.slice(0, 5).map(r => `
                 <div class="history-item">
-                    <strong>${record.action}</strong><br>
-                    <small>${record.date}</small><br>
-                    <span style="opacity: 0.8;">${
-                        record.qrData.raw_data || 
-                        Object.values(record.qrData).join(', ').substring(0, 50) + '...'
-                    }</span>
-                </div>
-            `).join('');
+                    <strong>${r.action}</strong><br>
+                    <small>${r.date}</small><br>
+                    <span style="opacity: 0.8;">${r.qrData.raw_data || Object.values(r.qrData).join(', ').substring(0, 50) + '...'}</span>
+                </div>`).join('');
         }
 
-        async function testCameraAccess() {
-            debugLog('=== Testing Camera Access ===');
-            showLoading(true);
-            
-            try {
-                // Test basic camera access
-                debugLog('Requesting basic camera access...');
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' }
-                });
-                
-                debugLog('✅ Camera access successful');
-                debugLog('Video tracks: ' + stream.getVideoTracks().length);
-                
-                stream.getVideoTracks().forEach((track, index) => {
-                    debugLog(`Track ${index + 1}: ${track.label} (${track.kind})`);
-                    debugLog(`Settings: ${JSON.stringify(track.getSettings())}`);
-                });
-                
-                // Test video display
-                const videoElement = document.getElementById('preview');
-                videoElement.srcObject = stream;
-                
-                videoElement.onloadedmetadata = () => {
-                    debugLog(`✅ Video display successful: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
-                    updateCameraStatus('Test Camera Active');
-                    showMessage('✅ Camera test successful! You can now start scanning.');
-                    
-                    // Stop test stream after 3 seconds
-                    setTimeout(() => {
-                        stream.getTracks().forEach(track => track.stop());
-                        videoElement.srcObject = null;
-                        updateCameraStatus('Camera Test Complete');
-                        debugLog('Test stream stopped');
-                    }, 3000);
-                };
-                
-                showLoading(false);
-                
-            } catch (error) {
-                showLoading(false);
-                debugLog('❌ Camera test failed: ' + error.name + ' - ' + error.message);
-                
-                let solution = '';
-                switch (error.name) {
-                    case 'NotAllowedError':
-                        solution = 'Solution: Click the camera icon in your browser address bar and select "Allow". Then refresh the page.';
-                        break;
-                    case 'NotFoundError':
-                        solution = 'Solution: Check if your device has a camera and it\'s not being used by another app.';
-                        break;
-                    case 'NotSupportedError':
-                        solution = 'Solution: Use Chrome, Safari, Firefox, or Edge browser.';
-                        break;
-                    case 'NotReadableError':
-                        solution = 'Solution: Close other apps using the camera and try again.';
-                        break;
-                    default:
-                        solution = 'Solution: Try refreshing the page or using a different browser.';
-                }
-                
-                showMessage(`❌ Camera test failed: ${error.name}. ${solution}`, true);
-            }
-        }
-        document.addEventListener('DOMContentLoaded', function() {
-            debugLog('=== Page Loaded ===');
-            updateHistoryDisplay();
-            checkBrowserSupport();
-            
-            // Pre-initialize scanner
-            setTimeout(() => {
-                if (typeof ZXing !== 'undefined') {
-                    debugLog('ZXing library loaded successfully');
-                } else {
-                    debugLog('ERROR: ZXing library failed to load');
-                    showMessage('QR scanning library failed to load. Please refresh the page.', true);
-                }
-            }, 1000);
-        });
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', function() {
-            if (codeReader) {
-                codeReader.reset();
-            }
-        });
-
-        // Handle page visibility
-        document.addEventListener('visibilitychange', function() {
-            if (document.hidden && isScanning) {
-                debugLog('Page hidden - stopping camera');
-                stopScanning();
-            }
-        });
+        document.addEventListener('DOMContentLoaded', () => { updateHistoryDisplay(); if (location.protocol !== 'https:' && location.hostname !== 'localhost') { showMessage('Camera requires HTTPS', true); } });
+        document.addEventListener('visibilitychange', () => { if (document.hidden && qrScanner) stopCamera(); });
     </script>
 </body>
 </html>
