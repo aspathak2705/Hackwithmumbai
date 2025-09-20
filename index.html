@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Scanner Mobile App</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qr-scanner/1.4.2/qr-scanner.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
     <style>
@@ -371,9 +371,12 @@
     </div>
 
     <script>
-        let qrScanner = null;
+        let stream = null;
+        let scanning = false;
         let currentQRData = null;
         let scanHistory = JSON.parse(localStorage.getItem('qrScanHistory') || '[]');
+        let canvas = null;
+        let context = null;
 
         // Firebase configuration (replace with your actual config)
         const firebaseConfig = {
@@ -397,7 +400,7 @@
                 errorMsg.textContent = message;
                 errorMsg.style.display = 'block';
                 successMsg.style.display = 'none';
-                setTimeout(() => errorMsg.style.display = 'none', 3000);
+                setTimeout(() => errorMsg.style.display = 'none', 5000);
             } else {
                 successMsg.textContent = message;
                 successMsg.style.display = 'block';
@@ -413,56 +416,109 @@
         async function startCamera() {
             try {
                 showLoading(true);
+                console.log('Starting camera...');
+                
+                // Stop any existing stream
+                if (stream) {
+                    stopCamera();
+                }
+
+                // Request camera permissions with better constraints
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: 'environment' }, // Back camera preferred
+                        width: { ideal: 1280, min: 640 },
+                        height: { ideal: 720, min: 480 },
+                        aspectRatio: { ideal: 16/9 }
+                    },
+                    audio: false
+                };
+
+                console.log('Requesting camera access...');
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 const video = document.getElementById('qr-video');
                 const placeholder = document.getElementById('camera-placeholder');
                 
-                // Check if QrScanner is supported
-                if (!QrScanner.hasCamera()) {
-                    throw new Error('No camera found');
-                }
-
-                qrScanner = new QrScanner(
-                    video,
-                    result => handleQRResult(result.data),
-                    {
-                        onDecodeError: err => {
-                            // Silently handle decode errors (normal when no QR in view)
-                        },
-                        highlightScanRegion: true,
-                        highlightCodeOutline: true,
-                        preferredCamera: 'environment' // Use back camera on mobile
-                    }
-                );
-
-                await qrScanner.start();
+                // Set up video element
+                video.srcObject = stream;
+                video.setAttribute('playsinline', true);
+                video.muted = true;
                 
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        console.log('Video metadata loaded');
+                        resolve();
+                    };
+                    video.onerror = reject;
+                    
+                    // Timeout fallback
+                    setTimeout(reject, 5000);
+                });
+
+                await video.play();
+                console.log('Video playing');
+                
+                // Create canvas for frame analysis
+                if (!canvas) {
+                    canvas = document.createElement('canvas');
+                    context = canvas.getContext('2d');
+                }
+                
+                // Show video and hide placeholder
                 video.style.display = 'block';
                 placeholder.style.display = 'none';
                 
+                // Update buttons
                 document.getElementById('start-btn').disabled = true;
                 document.getElementById('stop-btn').disabled = false;
                 
+                // Start scanning
+                scanning = true;
+                scanForQR();
+                
                 showLoading(false);
-                showMessage('Camera started successfully! Point at a QR code to scan.');
+                showMessage('Camera started! Point at a QR code to scan.');
                 
             } catch (error) {
                 showLoading(false);
-                showMessage(`Camera error: ${error.message}`, true);
-                console.error('Camera start error:', error);
+                console.error('Camera error:', error);
+                
+                let errorMessage = 'Camera access failed. ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Please allow camera permissions and try again.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No camera found on this device.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += 'Camera not supported on this browser.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage += 'Camera is being used by another application.';
+                } else {
+                    errorMessage += error.message || 'Unknown error occurred.';
+                }
+                
+                showMessage(errorMessage, true);
             }
         }
 
         function stopCamera() {
-            if (qrScanner) {
-                qrScanner.stop();
-                qrScanner.destroy();
-                qrScanner = null;
+            console.log('Stopping camera...');
+            scanning = false;
+            
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('Track stopped:', track.kind);
+                });
+                stream = null;
             }
             
             const video = document.getElementById('qr-video');
             const placeholder = document.getElementById('camera-placeholder');
             
+            video.srcObject = null;
             video.style.display = 'none';
             placeholder.style.display = 'flex';
             
@@ -472,7 +528,46 @@
             showMessage('Camera stopped');
         }
 
+        function scanForQR() {
+            if (!scanning) return;
+
+            const video = document.getElementById('qr-video');
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                // Set canvas size to match video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                // Draw current video frame to canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Get image data
+                const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Try to decode QR code
+                try {
+                    const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    
+                    if (qrCode && qrCode.data) {
+                        console.log('QR Code found:', qrCode.data);
+                        handleQRResult(qrCode.data);
+                        return; // Stop scanning after successful read
+                    }
+                } catch (error) {
+                    console.log('QR scan error:', error);
+                }
+            }
+            
+            // Continue scanning
+            if (scanning) {
+                requestAnimationFrame(scanForQR);
+            }
+        }
+
         function handleQRResult(data) {
+            scanning = false; // Stop scanning
             showLoading(true);
             
             try {
@@ -480,14 +575,17 @@
                 displayQRDetails(currentQRData);
                 saveToHistory('QR_SCANNED', currentQRData);
                 showLoading(false);
-                showMessage('QR Code scanned successfully!');
+                showMessage('🎉 QR Code scanned successfully!');
                 
-                // Stop camera after successful scan to save battery
-                stopCamera();
+                // Stop camera to save battery
+                setTimeout(() => stopCamera(), 1000);
                 
             } catch (error) {
                 showLoading(false);
                 showMessage(`Error processing QR code: ${error.message}`, true);
+                // Resume scanning on error
+                scanning = true;
+                scanForQR();
             }
         }
 
@@ -612,19 +710,49 @@
             `).join('');
         }
 
-        // Initialize history display on load
+        // Debug function to test camera access
+        function checkCameraSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showMessage('Camera API not supported in this browser', true);
+                return false;
+            }
+            return true;
+        }
+
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Page loaded');
             updateHistoryDisplay();
             
-            // Check for HTTPS (required for camera access)
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                showMessage('Camera requires HTTPS connection', true);
+            // Check browser compatibility
+            if (!checkCameraSupport()) {
+                return;
+            }
+            
+            // Check if running on HTTPS (required for camera)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                showMessage('⚠️ Camera requires HTTPS connection. Please use https:// or localhost', true);
+            }
+            
+            // Check if jsQR library loaded
+            if (typeof jsQR === 'undefined') {
+                showMessage('QR scanning library failed to load. Please refresh the page.', true);
+            } else {
+                console.log('jsQR library loaded successfully');
             }
         });
 
         // Handle page visibility change to manage camera
         document.addEventListener('visibilitychange', function() {
-            if (document.hidden && qrScanner) {
+            if (document.hidden && stream) {
+                console.log('Page hidden, stopping camera');
+                stopCamera();
+            }
+        });
+
+        // Handle beforeunload to cleanup
+        window.addEventListener('beforeunload', function() {
+            if (stream) {
                 stopCamera();
             }
         });
@@ -638,6 +766,21 @@
             }
             lastTouchEnd = now;
         }, false);
+
+        // Add debugging info
+        function debugCameraInfo() {
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    console.log('Available cameras:', videoDevices);
+                })
+                .catch(err => console.error('Error enumerating devices:', err));
+        }
+
+        // Call debug function
+        if (navigator.mediaDevices) {
+            debugCameraInfo();
+        }
     </script>
 </body>
 </html>
