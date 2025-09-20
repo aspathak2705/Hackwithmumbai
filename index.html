@@ -229,7 +229,13 @@
                 </div>`).join('');
         }
 
-        document.addEventListener('DOMContentLoaded', () => { updateHistoryDisplay(); if (location.protocol !== 'https:' && location.hostname !== 'localhost') { showMessage('Camera requires HTTPS', true); } });
+        document.addEventListener('DOMContentLoaded', () => { 
+            updateHistoryDisplay(); 
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') { 
+                showMessage('Camera requires a secure connection (HTTPS). Please use a local server or deploy to a host with HTTPS.', true); 
+                document.getElementById('start-btn').disabled = true;
+            } 
+        });
         document.addEventListener('visibilitychange', () => { if (document.hidden && qrScanner) stopCamera(); });
     </script>
 </body>
