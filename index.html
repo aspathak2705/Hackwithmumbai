@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>QR Scanner Mobile App</title>
-    <!-- Using a different, more reliable QR scanning approach -->
     <script src="https://unpkg.com/@zxing/library@latest"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             margin: 0;
@@ -357,6 +355,8 @@
             <button class="btn" id="start-btn" onclick="startScanning()">Start Camera</button>
             <button class="btn" id="stop-btn" onclick="stopScanning()" disabled>Stop Camera</button>
             <button class="btn" onclick="toggleDebug()">Debug Info</button>
+            <button class="btn" onclick="testCameraAccess()">Test Camera</button>
+            <button class="btn" onclick="testSupabaseConnection()">Test Database</button>
         </div>
 
         <div class="loading" id="loading">
@@ -395,13 +395,206 @@
     </div>
 
     <script>
-        // Global variables
-        let codeReader = null;
-        let selectedDeviceId = null;
-        let currentQRData = null;
-        let scanHistory = JSON.parse(localStorage.getItem('qrScanHistory') || '[]');
-        let isScanning = false;
-        let debugMode = false;
+        // =============================================================================
+        // SUPABASE CONFIGURATION
+        // =============================================================================
+        
+        // Replace these with your actual Supabase project credentials
+        const SUPABASE_CONFIG = {
+            url: 'https://bsgtvopnvxuwqvvjkkxy.supabase.co',  // Replace with your project URL
+            key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzZ3R2b3Budnh1d3F2dmpra3h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNjE4ODMsImV4cCI6MjA3MzkzNzg4M30.0DXHWwEII9nulWrUzJeY_DgVBgZNNxgd1rifg-jG0ys'              // Replace with your anon public key
+        };
+
+        // Supabase client
+        let supabaseClient = null;
+        let isSupabaseConfigured = false;
+
+
+        async function initializeDatabase() {
+            try {
+                debugLog('Initializing Supabase...');
+
+                // Check if Supabase is configured
+                if (SUPABASE_CONFIG.url === 'https://your-project-ref.supabase.co') {
+                    debugLog('⚠️ Supabase not configured yet - using local storage');
+                    showMessage('Configure Supabase credentials for cloud storage. Currently using local storage.', false);
+                    return true;
+                }
+
+                // Check if Supabase library is loaded
+                if (typeof supabase === 'undefined') {
+                    throw new Error('Supabase library not loaded');
+                }
+
+                // Initialize Supabase client
+                supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
+                
+                // Test connection
+                debugLog('Testing Supabase connection...');
+                const { data, error } = await supabaseClient
+                    .from('qr_scans')
+                    .select('count', { count: 'exact' })
+                    .limit(1);
+
+                if (error) {
+                    if (error.code === '42P01') {
+                        // Table doesn't exist
+                        debugLog('⚠️ Table "qr_scans" not found. Please create it in Supabase.');
+                        showMessage('Database table not found. Please run the SQL setup script in Supabase.', true);
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    debugLog(`✅ Supabase connected! Found ${data.length} records.`);
+                    showMessage('✅ Connected to Supabase database!', false);
+                    isSupabaseConfigured = true;
+                }
+
+                return true;
+
+            } catch (error) {
+                debugLog('Supabase initialization failed: ' + error.message);
+                showMessage('Supabase connection failed: ' + error.message + '. Using local storage.', true);
+                return true; // Continue with local storage
+            }
+        }
+
+        // =============================================================================
+        // DATABASE OPERATIONS
+        // =============================================================================
+
+        async function saveToDatabase(action, qrData, timestamp) {
+            const record = {
+                id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                action: action,
+                qr_data: qrData,
+                timestamp: timestamp,
+                device_info: {
+                    userAgent: navigator.userAgent.substring(0, 100),
+                    url: location.href,
+                    screen: `${screen.width}x${screen.height}`,
+                    platform: navigator.platform
+                }
+            };
+
+            try {
+                if (isSupabaseConfigured) {
+                    return await saveToSupabase(record);
+                } else {
+                    return await saveToLocalStorage(record);
+                }
+            } catch (error) {
+                debugLog('Supabase save failed, falling back to local: ' + error.message);
+                return await saveToLocalStorage(record);
+            }
+        }
+
+        // Save to Supabase
+        async function saveToSupabase(record) {
+            debugLog('Saving to Supabase...');
+            
+            const { data, error } = await supabaseClient
+                .from('qr_scans')
+                .insert([record])
+                .select();
+
+            if (error) {
+                debugLog('Supabase save error: ' + error.message);
+                throw error;
+            }
+            
+            debugLog('✅ Saved to Supabase successfully');
+            return true;
+        }
+
+        // Local storage fallback
+        async function saveToLocalStorage(record) {
+            let records = JSON.parse(localStorage.getItem('qr_database') || '[]');
+            records.unshift(record);
+            records = records.slice(0, 100); // Keep only last 100 records
+            localStorage.setItem('qr_database', JSON.stringify(records));
+            debugLog('✅ Saved to local storage');
+            return true;
+        }
+
+        // Get all records from database
+        async function getRecordsFromDatabase() {
+            try {
+                if (isSupabaseConfigured) {
+                    debugLog('Fetching records from Supabase...');
+                    const { data, error } = await supabaseClient
+                        .from('qr_scans')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(20);
+
+                    if (error) throw error;
+                    
+                    debugLog(`✅ Fetched ${data.length} records from Supabase`);
+                    return data;
+                } else {
+                    return JSON.parse(localStorage.getItem('qr_database') || '[]');
+                }
+            } catch (error) {
+                debugLog('Supabase fetch failed, using local: ' + error.message);
+                return JSON.parse(localStorage.getItem('qr_database') || '[]');
+            }
+        }
+
+        // Test Supabase connection
+        async function testSupabaseConnection() {
+            if (!isSupabaseConfigured) {
+                showMessage('Supabase not configured. Please add your credentials.', true);
+                return false;
+            }
+
+            try {
+                debugLog('Testing Supabase connection...');
+                showLoading(true);
+
+                // Test insert
+                const testRecord = {
+                    id: `test_${Date.now()}`,
+                    action: 'CONNECTION_TEST',
+                    qr_data: { test: 'connection' },
+                    timestamp: new Date().toISOString(),
+                    device_info: { test: true }
+                };
+
+                const { data, error } = await supabaseClient
+                    .from('qr_scans')
+                    .insert([testRecord])
+                    .select();
+
+                if (error) throw error;
+
+                // Test select
+                const { data: selectData, error: selectError } = await supabaseClient
+                    .from('qr_scans')
+                    .select('*')
+                    .eq('id', testRecord.id)
+                    .single();
+
+                if (selectError) throw selectError;
+
+                // Delete test record
+                await supabaseClient
+                    .from('qr_scans')
+                    .delete()
+                    .eq('id', testRecord.id);
+
+                showLoading(false);
+                showMessage('✅ Supabase connection test successful!', false);
+                debugLog('✅ Supabase connection test passed');
+                return true;
+
+            } catch (error) {
+                showLoading(false);
+                showMessage('❌ Supabase connection test failed: ' + error.message, true);
+                debugLog('❌ Supabase test failed: ' + error.message);
+                return false;
+            }
+        }
 
         // Debug logging
         function debugLog(message) {
@@ -429,12 +622,44 @@
             debugLog('=== Browser Support Check ===');
             debugLog('User Agent: ' + navigator.userAgent);
             debugLog('Protocol: ' + location.protocol);
+            debugLog('Hostname: ' + location.hostname);
+            debugLog('Full URL: ' + location.href);
             debugLog('MediaDevices API: ' + !!navigator.mediaDevices);
             debugLog('getUserMedia: ' + !!navigator.mediaDevices?.getUserMedia);
             debugLog('ZXing Library: ' + (typeof ZXing !== 'undefined'));
             
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                debugLog('⚠️ WARNING: Camera requires HTTPS');
+            // Check HTTPS requirement
+            const isSecure = location.protocol === 'https:' || 
+                           location.hostname === 'localhost' || 
+                           location.hostname === '127.0.0.1' ||
+                           location.hostname.endsWith('.localhost');
+            
+            debugLog('Secure Context: ' + isSecure);
+            
+            if (!isSecure) {
+                debugLog('⚠️ CRITICAL: Camera requires HTTPS connection');
+                showMessage('🔒 Camera requires HTTPS. Please use https:// in your URL or deploy to a secure hosting service.', true);
+            }
+            
+            // Check browser compatibility
+            const isCompatibleBrowser = /Chrome|Safari|Firefox|Edge/i.test(navigator.userAgent);
+            debugLog('Compatible Browser: ' + isCompatibleBrowser);
+            
+            if (!isCompatibleBrowser) {
+                debugLog('⚠️ WARNING: Unsupported browser detected');
+                showMessage('Please use Chrome, Safari, Firefox, or Edge for best camera support.', true);
+            }
+            
+            // Test camera permissions
+            if (navigator.permissions) {
+                navigator.permissions.query({ name: 'camera' })
+                    .then(permission => {
+                        debugLog('Camera permission state: ' + permission.state);
+                        if (permission.state === 'denied') {
+                            showMessage('Camera permission denied. Please reset site permissions and reload.', true);
+                        }
+                    })
+                    .catch(err => debugLog('Permission query failed: ' + err.message));
             }
         }
 
@@ -466,6 +691,52 @@
             document.getElementById('loading').style.display = show ? 'block' : 'none';
         }
 
+        // Global variables
+        let codeReader = null;
+        let selectedDeviceId = null;
+        let currentQRData = null;
+        let scanHistory = JSON.parse(localStorage.getItem('qrScanHistory') || '[]');
+        let isScanning = false;
+        let debugMode = false;
+            try {
+                debugLog('Requesting camera permission...');
+                
+                // First, request basic camera access to trigger permission dialog
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                
+                debugLog('Camera permission granted');
+                
+                // Stop the test stream
+                stream.getTracks().forEach(track => track.stop());
+                
+                return true;
+            } catch (error) {
+                debugLog('Camera permission error: ' + error.name + ' - ' + error.message);
+                
+                let errorMsg = 'Camera access denied. ';
+                if (error.name === 'NotAllowedError') {
+                    errorMsg += 'Please click the camera icon in your browser address bar and allow camera access, then refresh the page.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMsg += 'No camera found on this device.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMsg += 'Camera not supported. Please use Chrome, Safari, or Firefox.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMsg += 'Camera is being used by another application. Please close other camera apps.';
+                } else {
+                    errorMsg += error.message;
+                }
+                
+                showMessage(errorMsg, true);
+                return false;
+            }
+        }
+
         async function initializeScanner() {
             try {
                 debugLog('Initializing ZXing scanner...');
@@ -474,12 +745,22 @@
                     throw new Error('ZXing library not loaded');
                 }
                 
+                // Request camera permission first
+                const hasPermission = await requestCameraPermission();
+                if (!hasPermission) {
+                    return false;
+                }
+                
                 codeReader = new ZXing.BrowserMultiFormatReader();
                 debugLog('Scanner initialized successfully');
                 
-                // Get available cameras
+                // Get available cameras after permission is granted
                 const videoInputDevices = await codeReader.listVideoInputDevices();
                 debugLog(`Found ${videoInputDevices.length} camera(s):`);
+                
+                if (videoInputDevices.length === 0) {
+                    throw new Error('No video input devices found');
+                }
                 
                 videoInputDevices.forEach((device, index) => {
                     debugLog(`${index + 1}. ${device.label || 'Camera ' + (index + 1)} (${device.deviceId})`);
@@ -506,36 +787,60 @@
         async function startScanning() {
             try {
                 showLoading(true);
-                updateCameraStatus('Initializing...');
+                updateCameraStatus('Requesting Permission...');
                 debugLog('=== Starting Camera ===');
+                
+                // Check HTTPS requirement first
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                    throw new Error('Camera requires HTTPS connection. Please use https:// URL');
+                }
                 
                 // Initialize scanner if not done
                 if (!codeReader) {
+                    updateCameraStatus('Initializing Scanner...');
                     const initialized = await initializeScanner();
                     if (!initialized) {
                         showLoading(false);
+                        updateCameraStatus('Initialization Failed');
                         return;
                     }
                 }
                 
                 updateCameraStatus('Starting Camera...');
                 
-                // Start decoding from video device
-                await codeReader.decodeOnceFromVideoDevice(selectedDeviceId, 'preview')
-                    .then((result) => {
+                // Clear any existing video streams
+                const videoElement = document.getElementById('preview');
+                if (videoElement.srcObject) {
+                    videoElement.srcObject.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                }
+                
+                // Start scanning with explicit device selection
+                debugLog('Starting decode from video device: ' + selectedDeviceId);
+                
+                const constraints = {
+                    deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                    facingMode: selectedDeviceId ? undefined : { ideal: 'environment' },
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 },
+                    aspectRatio: { ideal: 16/9 },
+                    frameRate: { ideal: 15, max: 30 }
+                };
+                
+                debugLog('Using constraints: ' + JSON.stringify(constraints));
+                
+                // Use continuous scanning for better results
+                await codeReader.decodeFromConstraints(constraints, 'preview', (result, err) => {
+                    if (result) {
                         debugLog('QR Code detected: ' + result.text);
                         handleQRResult(result.text);
-                    })
-                    .catch((err) => {
-                        // This is normal - it means no QR code was found in the current frame
-                        if (err.name !== 'NotFoundException') {
-                            debugLog('Decode error: ' + err.message);
-                        }
-                    });
+                    }
+                    if (err && err.name !== 'NotFoundException') {
+                        debugLog('Decode error: ' + err.message);
+                    }
+                });
                 
-                // Start continuous scanning
                 isScanning = true;
-                continuousScanning();
                 
                 // Update UI
                 updateCameraStatus('Camera Active - Scanning...');
@@ -545,6 +850,15 @@
                 showLoading(false);
                 showMessage('📸 Camera started! Point at a QR code to scan.');
                 
+                // Add video event listeners for better debugging
+                videoElement.addEventListener('loadedmetadata', () => {
+                    debugLog(`Video loaded: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+                });
+                
+                videoElement.addEventListener('error', (e) => {
+                    debugLog('Video error: ' + e.message);
+                });
+                
             } catch (error) {
                 showLoading(false);
                 updateCameraStatus('Camera Error');
@@ -552,16 +866,50 @@
                 
                 let errorMessage = 'Camera failed to start: ';
                 if (error.name === 'NotAllowedError') {
-                    errorMessage += 'Camera permission denied. Please allow camera access.';
+                    errorMessage += 'Permission denied. Please:\n1. Click camera icon in address bar\n2. Allow camera access\n3. Refresh page and try again';
                 } else if (error.name === 'NotFoundError') {
-                    errorMessage += 'No camera found on this device.';
+                    errorMessage += 'No camera found. Please check if your device has a camera.';
                 } else if (error.name === 'NotSupportedError') {
-                    errorMessage += 'Camera not supported in this browser.';
+                    errorMessage += 'Camera not supported. Please use Chrome, Safari, or Firefox browser.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage += 'Camera constraints too strict. Trying with relaxed settings...';
+                    // Try again with relaxed constraints
+                    setTimeout(() => startScanningRelaxed(), 1000);
+                    return;
+                } else if (error.message.includes('HTTPS')) {
+                    errorMessage = error.message;
                 } else {
                     errorMessage += error.message;
                 }
                 
                 showMessage(errorMessage, true);
+            }
+        }
+
+        async function startScanningRelaxed() {
+            try {
+                debugLog('Trying with relaxed camera constraints...');
+                updateCameraStatus('Retrying with basic settings...');
+                
+                await codeReader.decodeFromConstraints({
+                    video: { facingMode: 'environment' }
+                }, 'preview', (result, err) => {
+                    if (result) {
+                        debugLog('QR Code detected: ' + result.text);
+                        handleQRResult(result.text);
+                    }
+                });
+                
+                isScanning = true;
+                updateCameraStatus('Camera Active - Scanning...');
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+                showMessage('📸 Camera started with basic settings!');
+                
+            } catch (error) {
+                debugLog('Relaxed camera start also failed: ' + error.message);
+                updateCameraStatus('All camera attempts failed');
+                showMessage('Unable to access camera. Please check permissions and try refreshing the page.', true);
             }
         }
 
@@ -680,6 +1028,7 @@
             
             const timestamp = new Date().toISOString();
             saveToHistory('CHECK_IN', currentQRData);
+            saveToDatabase('CHECK_IN', currentQRData, timestamp);
             showMessage('✅ Check-in recorded at ' + new Date().toLocaleTimeString());
             updateHistoryDisplay();
         }
@@ -689,6 +1038,7 @@
             
             const timestamp = new Date().toISOString();
             saveToHistory('CHECK_OUT', currentQRData);
+            saveToDatabase('CHECK_OUT', currentQRData, timestamp);
             showMessage('✅ Check-out recorded at ' + new Date().toLocaleTimeString());
             updateHistoryDisplay();
         }
@@ -728,7 +1078,70 @@
             `).join('');
         }
 
-        // Initialize on page load
+        async function testCameraAccess() {
+            debugLog('=== Testing Camera Access ===');
+            showLoading(true);
+            
+            try {
+                // Test basic camera access
+                debugLog('Requesting basic camera access...');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                
+                debugLog('✅ Camera access successful');
+                debugLog('Video tracks: ' + stream.getVideoTracks().length);
+                
+                stream.getVideoTracks().forEach((track, index) => {
+                    debugLog(`Track ${index + 1}: ${track.label} (${track.kind})`);
+                    debugLog(`Settings: ${JSON.stringify(track.getSettings())}`);
+                });
+                
+                // Test video display
+                const videoElement = document.getElementById('preview');
+                videoElement.srcObject = stream;
+                
+                videoElement.onloadedmetadata = () => {
+                    debugLog(`✅ Video display successful: ${videoElement.videoWidth}x${videoElement.videoHeight}`);
+                    updateCameraStatus('Test Camera Active');
+                    showMessage('✅ Camera test successful! You can now start scanning.');
+                    
+                    // Stop test stream after 3 seconds
+                    setTimeout(() => {
+                        stream.getTracks().forEach(track => track.stop());
+                        videoElement.srcObject = null;
+                        updateCameraStatus('Camera Test Complete');
+                        debugLog('Test stream stopped');
+                    }, 3000);
+                };
+                
+                showLoading(false);
+                
+            } catch (error) {
+                showLoading(false);
+                debugLog('❌ Camera test failed: ' + error.name + ' - ' + error.message);
+                
+                let solution = '';
+                switch (error.name) {
+                    case 'NotAllowedError':
+                        solution = 'Solution: Click the camera icon in your browser address bar and select "Allow". Then refresh the page.';
+                        break;
+                    case 'NotFoundError':
+                        solution = 'Solution: Check if your device has a camera and it\'s not being used by another app.';
+                        break;
+                    case 'NotSupportedError':
+                        solution = 'Solution: Use Chrome, Safari, Firefox, or Edge browser.';
+                        break;
+                    case 'NotReadableError':
+                        solution = 'Solution: Close other apps using the camera and try again.';
+                        break;
+                    default:
+                        solution = 'Solution: Try refreshing the page or using a different browser.';
+                }
+                
+                showMessage(`❌ Camera test failed: ${error.name}. ${solution}`, true);
+            }
+        }
         document.addEventListener('DOMContentLoaded', function() {
             debugLog('=== Page Loaded ===');
             updateHistoryDisplay();
